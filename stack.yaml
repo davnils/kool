@@ -1,0 +1,15 @@
+packages:
+- '.'
+- externals/distributed-process
+- externals/distributed-process-async
+- externals/distributed-process-extras
+- externals/distributed-process-client-server
+- externals/distributed-static
+- externals/network-transport
+- externals/network-transport-tcp
+- externals/rank1dynamic
+# - externals/avahi
+
+extra-deps: []
+
+resolver: nightly-2015-06-12
