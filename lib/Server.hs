@@ -6,8 +6,11 @@ import           Control.Concurrent                              (threadDelay)
 
 import           Control.Distributed.Process
 import           Control.Distributed.Process.Async
-import           Control.Distributed.Process.Node
+import           Control.Distributed.Process.Backend.SimpleLocalnet
+import           Control.Distributed.Process.Extras.Time
 import           Control.Distributed.Process.ManagedProcess
+import           Control.Distributed.Process.Node
+import           Control.Distributed.Process.Serializable
 
 import           Control.Monad.Trans                             (liftIO)
 import           Data.AffineSpace                                ((.-^))
@@ -60,17 +63,17 @@ reserveRequest limit (ServerState queue active) (ReserveRequest hash) = do
 
 -- | Initiate a build of the provided source on the previously acquired slot.
 --   The item is only considered expired if previously flushed. (TODO: correct logic??)
-buildRequest :: ServerState -> CallRef BuildReply -> BuildRequest -> Process (ProcessAction ServerState)
+buildRequest :: Serializable b => ServerState -> CallRef BuildReply -> BuildRequest -> Process (ProcessReply b ServerState)
 buildRequest state@(ServerState reserved active) caller req@(BuildRequest hash _ _ _) = do
   case P.lookup hash reserved of
-    Nothing -> replyTo caller Expired >> continue state
+    Nothing -> replyTo caller Expired >> noReply_ state
     Just _  -> do
       -- Remove from reserved queue, insert into active, and run compilation
       item <- asyncLinked (task . liftIO $ compile req)
       mon <- monitorAsync item
       let reserved' = P.delete hash reserved
       let active'   = M.insert mon (item, caller) active
-      continue (ServerState reserved' active')
+      noReply_ (ServerState reserved' active')
 
 -- | Compile the provided unit with the requested compiler and flags.
 compile :: BuildRequest -> IO CompilationResult
@@ -95,7 +98,29 @@ compilationDone state@(ServerState other active) (ProcessMonitorNotification ref
   consider (AsyncDone result) = CompilerOutput result
   consider _                  = UnknownError
 
+runBuildServer :: Process ()
+runBuildServer = do
+  pid <- getSelfPid
+  register buildRegName pid
+  serve () (const $ return $ InitOk (ServerState P.empty M.empty) Infinity) def
+  where
+  def = defaultProcess {
+          apiHandlers = [
+                  handleCall     (reserveRequest limit)
+                , handleCallFrom (buildRequest)
+          ]
+        , infoHandlers = [
+                  handleInfo compilationDone
+          ]
+        }
+
+  -- TODO: make this configurable or load #cores
+  limit = 4
+
 main :: IO ()
 main = do
-  Right t <- createTransport "127.0.0.1" "4444" defaultTCPParameters
-  liftIO $ threadDelay (20*1000000)
+  backend <- initializeBackend "127.0.0.1" "9999" rtable
+  node <- Control.Distributed.Process.Backend.SimpleLocalnet.newLocalNode backend
+  Control.Distributed.Process.Node.runProcess node runBuildServer
+  where
+  rtable = __remoteTable initRemoteTable

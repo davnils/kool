@@ -4,6 +4,7 @@ packages:
 - externals/distributed-process-async
 - externals/distributed-process-extras
 - externals/distributed-process-client-server
+- externals/distributed-process-simplelocalnet
 - externals/distributed-static
 - externals/network-transport
 - externals/network-transport-tcp

@@ -1,6 +1,8 @@
-{-# LANGUAGE DeriveGeneric, OverloadedStrings #-}
+{-# LANGUAGE DeriveGeneric, OverloadedStrings, TemplateHaskell #-}
 
 module Types where
+import           Control.Distributed.Process
+import           Control.Distributed.Process.Closure
 
 import           Data.Binary                                     (Binary)
 import qualified Data.ByteString.Char8                           as B
@@ -15,7 +17,7 @@ type CompilerVersion = (T.Text, Int, Int)
 
 type Flags           = [T.Text]
 type SourceUnit      = T.Text
-type Hash            = Integer
+type Hash            = B.ByteString
 type ObjectFile      = B.ByteString
 
 -- | Result of invoking a compiler.
@@ -36,6 +38,7 @@ instance Binary ReserveRequest where
 data ReserveReply
   = SlotReserved
   | NoCapacity
+  -- TODO: add CacheHit ...
   deriving (Generic, Typeable, Show)
 
 instance Binary ReserveReply where
@@ -53,6 +56,12 @@ data BuildReply
   deriving (Generic, Typeable, Show)
 
 instance Binary BuildReply where
+
+-- | Name used in registry lookup for server providing compilations
+buildRegName :: String
+buildRegName = "build_server"
+
+remotable ['whereis]
 
 -- TODO: add client/server executables and shared lib
 --       add basic client with option parsing (gcc invocation)

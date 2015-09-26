@@ -1,4 +1,6 @@
 module Main where
 
+import qualified Client
+
 main :: IO ()
-main = undefined
+main = Client.main
