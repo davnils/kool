@@ -1,8 +1,10 @@
-{-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE OverloadedStrings, ScopedTypeVariables #-}
 
 module Server where
 
 import           Control.Concurrent                              (threadDelay)
+import qualified Control.Concurrent.Async                        as A
+import           Control.Exception                               (catch, IOException)
 
 import           Control.Distributed.Process
 import           Control.Distributed.Process.Async
@@ -16,13 +18,15 @@ import           Control.Monad.Trans                             (liftIO)
 import           Data.AffineSpace                                ((.-^))
 import qualified Data.ByteString.Char8                           as B
 import qualified Data.Text                                       as T
+import qualified Data.Text.IO                                    as T
 import qualified Data.Map                                        as M
 import           Data.Monoid                                     ((<>))
 import qualified Data.PSQueue                                    as P
 import           Data.Thyme.Clock                                (UTCTime, getCurrentTime, fromSeconds)
 import           Network.Transport.TCP                           (createTransport, defaultTCPParameters)
 import           System.Exit                                     (ExitCode(..))
-import           System.Process                                  (readProcessWithExitCode)
+import           System.IO                                       (hSetBinaryMode, hClose)
+import qualified System.Process                                  as Proc
 import           Types
 
 -- | Queue of compilation slots that been reserved with timestamps.
@@ -78,12 +82,37 @@ buildRequest state@(ServerState reserved active) caller req@(BuildRequest hash _
 -- | Compile the provided unit with the requested compiler and flags.
 compile :: BuildRequest -> IO CompilationResult
 compile (BuildRequest _ _ flags source) = do
-  let flags' = (map T.unpack flags) <> ["-c", "-o /dev/stdout", "-"]
-  (code, stdout, stderr) <- readProcessWithExitCode "/usr/bin/gcc" flags' (T.unpack source)
+  putStrLn "[*] Invoking compilation"
+  let flags' = (map T.unpack flags) <> ["-c", "-xc++", "-o/dev/stdout", "-"]
+
+  (code, output, errorOutput) <- runWithBinaryOutput "/usr/bin/g++" flags' source
+  putStrLn ("[*] Compilation terminated with code=" <> show code)
+
   case code of
-    ExitSuccess -> return $ CompilationSuccess (B.pack stdout)
-    _           -> return $ CompilationFailed  (T.pack stderr)
+    ExitSuccess -> return $ CompilationSuccess output
+    _           -> return $ CompilationFailed  errorOutput
   -- TODO: add flags for deterministic builds
+
+-- | Run an external program with binary output on stdout.
+--   Output is return code and stdout/stderr contents.
+runWithBinaryOutput path flags input = flip Control.Exception.catch handler $ do
+  let proc' = (Proc.proc path flags) { Proc.std_in = Proc.CreatePipe, Proc.std_out = Proc.CreatePipe, Proc.std_err = Proc.CreatePipe }
+
+  (Just stdinHandle, Just stdoutHandle, Just stderrHandle, processHandle) <- Proc.createProcess proc'
+  hSetBinaryMode stdoutHandle True
+
+  T.hPutStr stdinHandle input
+  hClose stdinHandle
+
+  A.withAsync (B.hGetContents stdoutHandle) $ \stdoutResult -> do
+    A.withAsync (T.hGetContents stderrHandle) $ \stderrResult -> do
+      code <- Proc.waitForProcess processHandle
+      stdoutResult' <- A.wait stdoutResult
+      stderrResult' <- A.wait stderrResult
+      return (code, stdoutResult', stderrResult')
+
+  where
+  handler (e :: IOException) = print e >> return (ExitFailure 1, "", T.pack (show e))
 
 -- | Process a completed compilation and send result to client
 compilationDone :: ServerState -> ProcessMonitorNotification -> Process (ProcessAction ServerState)

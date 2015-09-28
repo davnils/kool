@@ -119,4 +119,4 @@ tryBuild compiler flags source hash proc = MaybeT $ do
     Just (CompilerOutput (CompilationSuccess output)) -> return . Just . Right $ output
 
 main :: IO ()
-main = buildFlow ("gcc", 4, 5) ["-v"] "int main(void){}" "output.o"
+main = buildFlow ("gcc", 4, 5) ["-O2"] "int main(void){}" "output.o"
