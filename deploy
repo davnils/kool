@@ -1,0 +1,9 @@
+cd ..
+f=kool.tar.gz
+rm $f 2> /dev/null
+echo ">> Uploading sources"
+tar cz --exclude '*.o' --exclude '*.hi' --exclude '.git' --exclude '.stack*' -f $f kool && scp $f c1:
+echo ">> Building sources"
+ssh c1 "tar xzf $f && cd kool && stack install"
+cd kool
+echo ">> Done"
