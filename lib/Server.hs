@@ -17,6 +17,8 @@ import           Control.Distributed.Process.Serializable
 import           Control.Monad.Trans                             (liftIO)
 import           Data.AffineSpace                                ((.-^))
 import qualified Data.ByteString.Char8                           as B
+import qualified Data.ByteString.Lazy.Char8                      as BL
+import           Data.Digest.Pure.SHA                            (bytestringDigest, showDigest)
 import qualified Data.Text                                       as T
 import qualified Data.Text.IO                                    as T
 import qualified Data.Map                                        as M
@@ -29,8 +31,10 @@ import           System.IO                                       (hSetBinaryMode
 import qualified System.Process                                  as Proc
 import           Types
 
+type SerializedHash = B.ByteString
+
 -- | Queue of compilation slots that been reserved with timestamps.
-type ReservedQueue = P.PSQ Hash UTCTime
+type ReservedQueue = P.PSQ SerializedHash UTCTime
 --
 -- | Active compilations identified by a monitoring reference.
 type ActiveMap     = M.Map MonitorRef (Async CompilationResult, CallRef BuildReply)
@@ -38,6 +42,8 @@ type ActiveMap     = M.Map MonitorRef (Async CompilationResult, CallRef BuildRep
 -- | Server state composed of queue with reserved slots, and map of running compilations.
 data ServerState
   = ServerState ReservedQueue ActiveMap
+
+strictBytestrDigest = BL.toStrict . bytestringDigest
 
 -- | Flush expired elements from the queue, as defined by a timeout in seconds.
 flushExpired :: Int -> ReservedQueue -> IO ReservedQueue
@@ -62,57 +68,41 @@ reserveRequest limit (ServerState queue active) (ReserveRequest hash) = do
     True  -> reply NoCapacity (ServerState flushedQueue active)
     False -> do
       now <- liftIO getCurrentTime
-      let flushedQueue' = P.insert hash now flushedQueue
+      let flushedQueue' = P.insert (strictBytestrDigest hash) now flushedQueue
       reply SlotReserved (ServerState flushedQueue' active)
 
 -- | Initiate a build of the provided source on the previously acquired slot.
 --   The item is only considered expired if previously flushed. (TODO: correct logic??)
 buildRequest :: Serializable b => ServerState -> CallRef BuildReply -> BuildRequest -> Process (ProcessReply b ServerState)
 buildRequest state@(ServerState reserved active) caller req@(BuildRequest hash _ _ _) = do
-  case P.lookup hash reserved of
+  let hash' = strictBytestrDigest hash
+  case P.lookup hash' reserved of
     Nothing -> replyTo caller Expired >> noReply_ state
     Just _  -> do
       -- Remove from reserved queue, insert into active, and run compilation
       item <- asyncLinked (task . liftIO $ compile req)
       mon <- monitorAsync item
-      let reserved' = P.delete hash reserved
+      let reserved' = P.delete hash' reserved
       let active'   = M.insert mon (item, caller) active
       noReply_ (ServerState reserved' active')
 
 -- | Compile the provided unit with the requested compiler and flags.
 compile :: BuildRequest -> IO CompilationResult
-compile (BuildRequest _ _ flags source) = do
+compile (BuildRequest hash _ flags source) = do
   putStrLn "[*] Invoking compilation"
-  let flags' = (map T.unpack flags) <> ["-c", "-xc++", "-o/dev/stdout", "-"]
-
-  (code, output, errorOutput) <- runWithBinaryOutput "/usr/bin/g++" flags' source
-  putStrLn ("[*] Compilation terminated with code=" <> show code)
-
-  case code of
-    ExitSuccess -> return $ CompilationSuccess output
-    _           -> return $ CompilationFailed  errorOutput
+  let fileName = "/tmp/" <> "kool-" <> showDigest hash
   -- TODO: add flags for deterministic builds
+  let flags' = ["-c", "-xc++", "-o" <> fileName, "-"]
 
--- | Run an external program with binary output on stdout.
---   Output is return code and stdout/stderr contents.
-runWithBinaryOutput path flags input = flip Control.Exception.catch handler $ do
-  let proc' = (Proc.proc path flags) { Proc.std_in = Proc.CreatePipe, Proc.std_out = Proc.CreatePipe, Proc.std_err = Proc.CreatePipe }
+  flip Control.Exception.catch handler $ do
+    (code, _, err) <- Proc.readProcessWithExitCode "/usr/bin/g++" flags' (T.unpack source)
+    putStrLn ("[*] Compilation terminated with code=" <> show code)
 
-  (Just stdinHandle, Just stdoutHandle, Just stderrHandle, processHandle) <- Proc.createProcess proc'
-  hSetBinaryMode stdoutHandle True
-
-  T.hPutStr stdinHandle input
-  hClose stdinHandle
-
-  A.withAsync (B.hGetContents stdoutHandle) $ \stdoutResult -> do
-    A.withAsync (T.hGetContents stderrHandle) $ \stderrResult -> do
-      code <- Proc.waitForProcess processHandle
-      stdoutResult' <- A.wait stdoutResult
-      stderrResult' <- A.wait stderrResult
-      return (code, stdoutResult', stderrResult')
-
+    case code of
+      ExitSuccess -> fmap CompilationSuccess (B.readFile fileName)
+      _           -> return $ CompilationFailed (T.pack err)
   where
-  handler (e :: IOException) = print e >> return (ExitFailure 1, "", T.pack (show e))
+  handler (e :: IOException) = print e >> return (CompilationFailed (T.pack (show e)))
 
 -- | Process a completed compilation and send result to client
 compilationDone :: ServerState -> ProcessMonitorNotification -> Process (ProcessAction ServerState)
@@ -131,7 +121,7 @@ runBuildServer :: Process ()
 runBuildServer = do
   pid <- getSelfPid
   register buildRegName pid
-  serve () (const $ return $ InitOk (ServerState P.empty M.empty) Infinity) def
+  serve () (const $ return $ InitOk (ServerState P.empty M.empty) (Delay $ seconds 1)) def
   where
   def = defaultProcess {
           apiHandlers = [
