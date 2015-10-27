@@ -25,12 +25,18 @@ import qualified Data.Map                                        as M
 import           Data.Monoid                                     ((<>))
 import qualified Data.PSQueue                                    as P
 import           Data.Thyme.Clock                                (UTCTime, getCurrentTime, fromSeconds)
+import           GHC.Conc                                        (getNumProcessors, setNumCapabilities)
 import           Network.Transport.TCP                           (createTransport, defaultTCPParameters)
 import           System.Exit                                     (ExitCode(..))
 import           System.IO                                       (hSetBinaryMode, hClose)
 import qualified System.Process                                  as Proc
 import           Types
 
+-- | Number of seconds before an entry in the reserved queue is expired.
+queueTimeout :: Int
+queueTimeout = 5
+
+-- | Internal serialized representation of the source file hash.
 type SerializedHash = B.ByteString
 
 -- | Queue of compilation slots that been reserved with timestamps.
@@ -62,7 +68,7 @@ flushExpired timeout queue = do
 reserveRequest :: Int -> ServerState -> ReserveRequest -> Process (ProcessReply ReserveReply ServerState)
 reserveRequest limit (ServerState queue active) (ReserveRequest hash) = do
   -- TODO: handle overlapping queue items (fail req with fast client retry). allow double if already active?
-  flushedQueue <- liftIO $ flushExpired 5 queue
+  flushedQueue <- liftIO $ flushExpired queueTimeout queue
 
   case (P.size flushedQueue + M.size active >= limit) of
     True  -> reply NoCapacity (ServerState flushedQueue active)
@@ -72,7 +78,7 @@ reserveRequest limit (ServerState queue active) (ReserveRequest hash) = do
       reply SlotReserved (ServerState flushedQueue' active)
 
 -- | Initiate a build of the provided source on the previously acquired slot.
---   The item is only considered expired if previously flushed. (TODO: correct logic??)
+--   The item is only considered expired if previously flushed.
 buildRequest :: Serializable b => ServerState -> CallRef BuildReply -> BuildRequest -> Process (ProcessReply b ServerState)
 buildRequest state@(ServerState reserved active) caller req@(BuildRequest hash _ _ _) = do
   let hash' = strictBytestrDigest hash
@@ -117,8 +123,8 @@ compilationDone state@(ServerState other active) (ProcessMonitorNotification ref
   consider (AsyncDone result) = CompilerOutput result
   consider _                  = UnknownError
 
-runBuildServer :: Process ()
-runBuildServer = do
+runBuildServer :: Int -> Process ()
+runBuildServer limit = do
   pid <- getSelfPid
   register buildRegName pid
   serve () (const $ return $ InitOk (ServerState P.empty M.empty) (Delay $ seconds 1)) def
@@ -133,13 +139,15 @@ runBuildServer = do
           ]
         }
 
-  -- TODO: make this configurable or load #cores
-  limit = 4
-
 main :: IO ()
 main = do
   backend <- initializeBackend "127.0.0.1" "9999" rtable
   node <- Control.Distributed.Process.Backend.SimpleLocalnet.newLocalNode backend
-  Control.Distributed.Process.Node.runProcess node runBuildServer
+
+  procs <- getNumProcessors
+  putStrLn ("[*] Reconfiguring server process to use #cores=" <> show procs)
+  setNumCapabilities procs
+
+  Control.Distributed.Process.Node.runProcess node (runBuildServer procs)
   where
   rtable = __remoteTable initRemoteTable
