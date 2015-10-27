@@ -12,7 +12,7 @@ cabal-version:       >=1.10
 
 library
   hs-source-dirs:      lib
-  exposed-modules:     Client, Types, Server
+  exposed-modules:     ArgsParser, Client, Types, Server
   build-depends:       base
                      , async                               == 2.0.*
                      -- , avahi                               == 0.1.*

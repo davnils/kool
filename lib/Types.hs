@@ -65,7 +65,6 @@ buildRegName = "build_server"
 remotable ['whereis]
 
 -- TODO: 
---       add basic client with option parsing (gcc invocation)
 --       integrate configuration containing compiler paths
 --       integrate configuration options for timeouts
 --       add retry mechanisms in client

@@ -2,9 +2,10 @@
 
 module Client where
 
+import           ArgsParser
 import qualified Control.Concurrent.Async                        as A
 import           Control.Exception                                  (Exception(..), catch, IOException, SomeException)
-import           Control.Monad                                      (when, liftM2)
+import           Control.Monad                                      (when, liftM2, void)
 import           Control.Monad.Trans                                (lift, MonadIO(..))
 import           Control.Monad.Trans.Maybe                          (MaybeT(..), runMaybeT)
 import           Control.Distributed.Process
@@ -22,6 +23,7 @@ import           Data.Digest.Pure.SHA                               (sha256)
 import qualified Data.Text                                       as T
 import qualified Data.Text.IO                                    as T
 import           Network.Transport.TCP                              (createTransport, defaultTCPParameters)
+import           System.Environment                                 (getArgs)
 import           System.Exit                                        (ExitCode(..))
 import           System.IO                                          (writeFile) -- TODO
 import qualified System.Process                                  as Proc
@@ -63,13 +65,19 @@ getBuildProcess node = MaybeT $ Control.Distributed.Process.call dict node (clos
 
 ----------------------------------------------------------------------------------------
 
+invokeLocalCompiler :: [String] -> T.Text -> IO (ExitCode, String, String)
+invokeLocalCompiler flags input = do
+  putStrLn $ "[*] Invoking g++ with flags=" <> show flags
+  flip Control.Exception.catch handler $
+    Proc.readProcessWithExitCode "/usr/bin/g++" flags (T.unpack input)
+  where
+  handler (e :: IOException) = return (ExitFailure 1, "", show e)
+
 preprocess :: CompilerVersion -> Flags -> SourceUnit -> IO (Maybe SourceUnit)
 preprocess _ flags source =  do
   let flags' = (map T.unpack flags) <> ["-E", "-xc++", "-o/dev/stdout", "-"]
 
-  (code, out, err) <- flip Control.Exception.catch handler $
-    Proc.readProcessWithExitCode "/usr/bin/g++" flags' (T.unpack source)
-
+  (code, out, err) <- invokeLocalCompiler flags' source
   case code of
     ExitSuccess -> do
       putStrLn $ "[+] Preprocessing succeeded with bytes=" <> show (length out)
@@ -79,8 +87,6 @@ preprocess _ flags source =  do
       putStrLn "[-] Preprocessing failed, output follows"
       putStr err
       return   Nothing
-  where
-  handler (e :: IOException) = return (ExitFailure 1, "", show e)
 
 buildFlow :: CompilerVersion -> Flags -> SourceUnit -> String -> IO ()
 buildFlow compiler flags source outputFile = do
@@ -152,5 +158,14 @@ tryBuild compiler flags source hash proc = MaybeT $ do
 
     Just (CompilerOutput (CompilationSuccess output)) -> return . Just . Right $ output
 
+invokeLocal :: [String] -> IO ()
+invokeLocal = void . flip invokeLocalCompiler ""
+
 main :: IO ()
-main = buildFlow ("gcc", 4, 5) ["-O2"] "#include <iostream> int main(void){}" "output.o"
+main = do
+  args <- getArgs
+  case classify args of
+    InvokeLocal args' -> invokeLocal args'
+    DistributedCompilation inputFile outputFile args' -> do
+      source <- T.readFile inputFile
+      buildFlow ("gcc", 4, 5) (map T.pack args') source outputFile
