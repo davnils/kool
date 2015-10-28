@@ -1,4 +1,4 @@
-# kool - Distributed Cached C++ Compilation [![Build status](https://travis-ci.org/davnils/kool.svg)]
+# kool - Distributed Cached C++ Compilation ![Build status](https://travis-ci.org/davnils/kool.svg)
 
 distcc-style distributed C++ compilation with integrated object file cache.
 
