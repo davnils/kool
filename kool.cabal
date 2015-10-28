@@ -60,6 +60,7 @@ test-suite kool-test
   type:                exitcode-stdio-1.0
   hs-source-dirs:      test
   main-is:             Main.hs
+  other-modules:       ArgsParserTests, ClientTests, ServerTests
   build-depends:       base
                      , kool
                      , tasty                               == 0.10.*

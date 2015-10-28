@@ -45,7 +45,10 @@ constructDistributed args = do
   ([_, (_, output)], args'') <- extractPredicates [matchFlag "o", matchVal] args'
 
   -- extract input filename as a Value field in either leading or trailing position
-  (input, processedArgs) <- consider args'' <|> (consider (reverse args''))
+  (input, processedArgs) <- consider args'' <|> (do
+    (x, xs) <- consider (reverse args'')
+    return $ (x, reverse xs)
+    )
 
   return $ DistributedCompilation input output (map snd processedArgs)
   where

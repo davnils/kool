@@ -4,7 +4,7 @@ import ArgsParserTests
 import ClientTests
 import ServerTests
 
-import Test.Tasty
+import Test.Tasty (defaultMain, testGroup)
 
 main :: IO ()
 main = defaultMain $ testGroup "Kool tests" [
