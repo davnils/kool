@@ -2,6 +2,7 @@
 
 module Server where
 
+import           BuildQueue
 import           Control.Concurrent                              (threadDelay)
 import qualified Control.Concurrent.Async                        as A
 import           Control.Exception                               (catch, IOException)
@@ -15,15 +16,12 @@ import           Control.Distributed.Process.Node
 import           Control.Distributed.Process.Serializable
 
 import           Control.Monad.Trans                             (liftIO)
-import           Data.AffineSpace                                ((.-^))
 import qualified Data.ByteString.Char8                           as B
-import qualified Data.ByteString.Lazy.Char8                      as BL
-import           Data.Digest.Pure.SHA                            (bytestringDigest, showDigest)
+import           Data.Digest.Pure.SHA                            (showDigest)
 import qualified Data.Text                                       as T
 import qualified Data.Text.IO                                    as T
 import qualified Data.Map                                        as M
 import           Data.Monoid                                     ((<>))
-import qualified Data.PSQueue                                    as P
 import           Data.Thyme.Clock                                (UTCTime, getCurrentTime, fromSeconds)
 import           GHC.Conc                                        (getNumProcessors, setNumCapabilities)
 import           Network.Transport.TCP                           (createTransport, defaultTCPParameters)
@@ -36,12 +34,6 @@ import           Types
 queueTimeout :: Int
 queueTimeout = 5
 
--- | Internal serialized representation of the source file hash.
-type SerializedHash = B.ByteString
-
--- | Queue of compilation slots that been reserved with timestamps.
-type ReservedQueue = P.PSQ SerializedHash UTCTime
---
 -- | Active compilations identified by a monitoring reference.
 type ActiveMap     = M.Map MonitorRef (Async CompilationResult, CallRef BuildReply)
 
@@ -49,46 +41,29 @@ type ActiveMap     = M.Map MonitorRef (Async CompilationResult, CallRef BuildRep
 data ServerState
   = ServerState ReservedQueue ActiveMap
 
-strictBytestrDigest = BL.toStrict . bytestringDigest
-
--- | Flush expired elements from the queue, as defined by a timeout in seconds.
-flushExpired :: Int -> ReservedQueue -> IO ReservedQueue
-flushExpired timeout queue = do
-  limit <- fmap (.-^ fromSeconds timeout) getCurrentTime
-  go limit queue
-  where
-  go limit queue = case P.findMin queue of
-    Nothing -> return queue
-    Just binding  -> do
-      if P.prio binding < limit
-        then go limit (P.deleteMin queue)
-        else return queue
-
 -- | Check if there's still capacity and reserve a slot for the requested build.
 reserveRequest :: Int -> ServerState -> ReserveRequest -> Process (ProcessReply ReserveReply ServerState)
 reserveRequest limit (ServerState queue active) (ReserveRequest hash) = do
-  -- TODO: handle overlapping queue items (fail req with fast client retry). allow double if already active?
-  flushedQueue <- liftIO $ flushExpired queueTimeout queue
-
-  case (P.size flushedQueue + M.size active >= limit) of
+  -- TODO: handle overlapping queue items (fail req with fast client retry). allow double if already active? duplicate outgoing notifications? (sounds good)
+  now <- liftIO getCurrentTime 
+  let flushedQueue = flushExpired queueTimeout now queue
+  case (countItems flushedQueue + M.size active >= limit) of
     True  -> reply NoCapacity (ServerState flushedQueue active)
     False -> do
-      now <- liftIO getCurrentTime
-      let flushedQueue' = P.insert (strictBytestrDigest hash) now flushedQueue
+      let flushedQueue' = insertItem hash now flushedQueue
       reply SlotReserved (ServerState flushedQueue' active)
 
 -- | Initiate a build of the provided source on the previously acquired slot.
 --   The item is only considered expired if previously flushed.
 buildRequest :: Serializable b => ServerState -> CallRef BuildReply -> BuildRequest -> Process (ProcessReply b ServerState)
 buildRequest state@(ServerState reserved active) caller req@(BuildRequest hash _ _ _) = do
-  let hash' = strictBytestrDigest hash
-  case P.lookup hash' reserved of
+  case itemExists hash reserved of
     Nothing -> replyTo caller Expired >> noReply_ state
     Just _  -> do
       -- Remove from reserved queue, insert into active, and run compilation
       item <- asyncLinked (task . liftIO $ compile req)
       mon <- monitorAsync item
-      let reserved' = P.delete hash' reserved
+      let reserved' = deleteItem hash reserved
       let active'   = M.insert mon (item, caller) active
       noReply_ (ServerState reserved' active')
 
@@ -127,7 +102,7 @@ runBuildServer :: Int -> Process ()
 runBuildServer limit = do
   pid <- getSelfPid
   register buildRegName pid
-  serve () (const $ return $ InitOk (ServerState P.empty M.empty) (Delay $ seconds 1)) def
+  serve () (const $ return $ InitOk (ServerState emptyQueue M.empty) (Delay $ seconds 1)) def
   where
   def = defaultProcess {
           apiHandlers = [

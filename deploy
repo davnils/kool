@@ -6,6 +6,6 @@ tar cz --exclude '*.o' --exclude '*.hi' --exclude '.git' --exclude '.stack*' -f 
 echo ">> Uploading sources"
 scp $f c1:
 echo ">> Building sources"
-ssh c1 "tar xzf $f && cd kool && stack install"
+ssh c1 "tar xzf $f && cd kool && stack test kool && stack install"
 cd kool
 echo ">> Done"

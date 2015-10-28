@@ -12,7 +12,7 @@ cabal-version:       >=1.10
 
 library
   hs-source-dirs:      lib
-  exposed-modules:     ArgsParser, Client, Types, Server
+  exposed-modules:     ArgsParser, BuildQueue, Client, Server, Types
   build-depends:       base
                      , async                               == 2.0.*
                      -- , avahi                               == 0.1.*
@@ -60,11 +60,13 @@ test-suite kool-test
   type:                exitcode-stdio-1.0
   hs-source-dirs:      test
   main-is:             Main.hs
-  other-modules:       ArgsParserTests, ClientTests, ServerTests
+  other-modules:       ArgsParserTests, BuildQueueTests, ClientTests, ServerTests
   build-depends:       base
                      , kool
+                     , SHA                                 == 1.6.*
                      , tasty                               == 0.10.*
                      , tasty-hunit                         == 0.9.*
+                     , thyme                               == 0.3.*
   ghc-options:         -threaded -rtsopts -with-rtsopts=-N
   default-language:    Haskell2010
 
