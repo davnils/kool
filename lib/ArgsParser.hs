@@ -11,8 +11,8 @@ data Action
   deriving (Eq, Show)
 
 data ArgumentType
-  -- | The argument might be a key, e.g. -o.
-  = Key
+  -- | The argument might be a key, e.g. "-o", with "o" stored in the constructor.
+  = Key String
   -- | The argument is not a key but a value to some key or standalone.
   | Value
   deriving (Eq, Ord, Show)
@@ -49,7 +49,7 @@ constructDistributed args = do
 
   return $ DistributedCompilation input output (map snd processedArgs)
   where
-  matchFlag ref = \(kind, val) -> kind == Key && val == ref
+  matchFlag ref = \(kind, _) -> kind == Key ref
   matchVal      = \(kind, val) -> kind == Value
 
   consider ((Value, val):xs) = Just (val, xs)
@@ -68,6 +68,6 @@ extractPredicates (p:ps) (x:xs)
 -- | Parse a list of arguments into tagged representation.
 parse :: [String] -> Args
 parse []                  = []
-parse (('-':'-':flag):xs) = (Key, flag)  : parse xs
-parse (('-':flag):xs)     = (Key, flag)  : parse xs
+parse (f@('-':'-':flag):xs) = (Key flag, f)  : parse xs
+parse (f@('-':flag):xs)     = (Key flag, f)  : parse xs
 parse (val:xs)            = (Value, val) : parse xs
