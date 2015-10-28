@@ -1,15 +1,40 @@
 packages:
 - '.'
-- externals/distributed-process
-- externals/distributed-process-async
-- externals/distributed-process-extras
-- externals/distributed-process-client-server
-- externals/distributed-process-simplelocalnet
-- externals/distributed-static
-- externals/network-transport
-- externals/network-transport-tcp
-- externals/rank1dynamic
-# - externals/avahi
+- location:
+    git: git@github.com:haskell-distributed/distributed-process
+    commit: 8aa1f702b07b55da3a0a615ea95419e5ef059da8
+
+- location:
+    git: git@github.com:haskell-distributed/distributed-process-async
+    commit: 2f2978016b6ae9cb35d4cef5a74d476b8bfedb1f
+
+- location:
+    git: git@github.com:haskell-distributed/distributed-process-extras
+    commit: 0a79d2e5c72333e2c6ada65adfc4608ed07bf703
+
+- location:
+    git: git@github.com:haskell-distributed/distributed-process-client-server
+    commit: 1df389a47ba0148fe9ba0718f5026eb92b84f32e
+
+- location:
+    git: git@github.com:haskell-distributed/distributed-process-simplelocalnet
+    commit: 19e8948409c84ad52fb9678a91d38238fc29b1c8
+
+- location:
+    git: git@github.com:haskell-distributed/distributed-static
+    commit: 16276bd2fc8a5d87d79737750b23152d58b7c1dd
+
+- location:
+    git: git@github.com:haskell-distributed/network-transport
+    commit: 65252abe650edd3b0d45b968ace689c913d669f4
+
+- location:
+    git: git@github.com:haskell-distributed/network-transport-tcp
+    commit: f0f2edbdfd6a5c991614984c3007dd66805cd004
+
+- location:
+    git: git@github.com:haskell-distributed/rank1dynamic
+    commit: 323a3b2e61163754785fabda7f3e39cdaeb01863
 
 extra-deps: []
 
