@@ -12,13 +12,14 @@ cabal-version:       >=1.10
 
 library
   hs-source-dirs:      lib
-  exposed-modules:     ArgsParser, BuildQueue, Client, Server, Types
+  exposed-modules:     ArgsParser, BuildQueue, Client, Server, Types, Utils
   build-depends:       base
                      , async                               == 2.0.*
                      -- , avahi                               == 0.1.*
                      , binary                              == 0.7.*
                      , bytestring                          == 0.10.*
                      , containers                          == 0.5.*
+                     , deepseq                             == 1.4.*
                      , distributed-process                 == 0.5.*
                      , distributed-process-async           == 0.2.*
                      , distributed-process-client-server   == 0.1.*
@@ -60,7 +61,7 @@ test-suite kool-test
   type:                exitcode-stdio-1.0
   hs-source-dirs:      test
   main-is:             Main.hs
-  other-modules:       ArgsParserTests, BuildQueueTests, ClientTests, ServerTests
+  other-modules:       ArgsParserTests, BuildQueueTests, ClientTests, ServerTests, UtilsTests
   build-depends:       base
                      , kool
                      , SHA                                 == 1.6.*

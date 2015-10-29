@@ -26,8 +26,8 @@ import           Network.Transport.TCP                              (createTrans
 import           System.Environment                                 (getArgs)
 import           System.Exit                                        (ExitCode(..))
 import           System.IO                                          (writeFile) -- TODO
-import qualified System.Process                                  as Proc
 import           Types
+import           Utils
 
 type Servers = [(String, String)]
 
@@ -64,14 +64,6 @@ getBuildProcess node = MaybeT $ Control.Distributed.Process.call dict node (clos
   closure = $(mkClosure 'whereis)
 
 ----------------------------------------------------------------------------------------
-
-invokeLocalCompiler :: [String] -> T.Text -> IO (ExitCode, String, String)
-invokeLocalCompiler flags input = do
-  putStrLn $ "[*] Invoking g++ with flags=" <> show flags
-  flip Control.Exception.catch handler $
-    Proc.readProcessWithExitCode "/usr/bin/g++" flags (T.unpack input)
-  where
-  handler (e :: IOException) = return (ExitFailure 1, "", show e)
 
 preprocess :: CompilerVersion -> Flags -> SourceUnit -> IO (Maybe SourceUnit)
 preprocess _ flags source =  do

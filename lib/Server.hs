@@ -29,6 +29,7 @@ import           System.Exit                                     (ExitCode(..))
 import           System.IO                                       (hSetBinaryMode, hClose)
 import qualified System.Process                                  as Proc
 import           Types
+import           Utils
 
 -- | Number of seconds before an entry in the reserved queue is expired.
 queueTimeout :: Int
@@ -75,15 +76,12 @@ compile (BuildRequest hash _ flags source) = do
   -- TODO: add flags for deterministic builds
   let flags' = ["-c", "-xc++", "-o" <> fileName, "-"]
 
-  flip Control.Exception.catch handler $ do
-    (code, _, err) <- Proc.readProcessWithExitCode "/usr/bin/g++" flags' (T.unpack source)
-    putStrLn ("[*] Compilation terminated with code=" <> show code)
+  (code, _, err) <- invokeLocalCompiler flags' source
+  putStrLn ("[*] Compilation terminated with code=" <> show code)
 
-    case code of
-      ExitSuccess -> fmap CompilationSuccess (B.readFile fileName)
-      _           -> return $ CompilationFailed (T.pack err)
-  where
-  handler (e :: IOException) = print e >> return (CompilationFailed (T.pack (show e)))
+  case code of
+    ExitSuccess -> fmap CompilationSuccess (B.readFile fileName)
+    _           -> return $ CompilationFailed (T.pack err)
 
 -- | Process a completed compilation and send result to client
 compilationDone :: ServerState -> ProcessMonitorNotification -> Process (ProcessAction ServerState)

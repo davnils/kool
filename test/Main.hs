@@ -4,6 +4,7 @@ import ArgsParserTests
 import BuildQueueTests
 import ClientTests
 import ServerTests
+import UtilsTests
 
 import Test.Tasty (defaultMain, testGroup)
 
@@ -12,5 +13,6 @@ main = defaultMain $ testGroup "Kool tests" [
          argsParserTree,
          buildQueueTree,
          clientTree,
-         serverTree
+         serverTree,
+         utilsTree
        ]
