@@ -40,7 +40,7 @@ data ReserveReply
   = SlotReserved
   | NoCapacity
   -- TODO: add CacheHit ...
-  deriving (Generic, Typeable, Show)
+  deriving (Eq, Generic, Typeable, Show)
 
 instance Binary ReserveReply where
 
@@ -63,11 +63,3 @@ buildRegName :: String
 buildRegName = "build_server"
 
 remotable ['whereis]
-
--- TODO: 
---       integrate configuration containing compiler paths
---       integrate configuration options for timeouts
---       add retry mechanisms in client
---       add randomized node selection in client
---       integrate proper build host discovery
---       what about hashing a compressed version? sorting the flags etc? uniqify the hash.

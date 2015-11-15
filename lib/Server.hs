@@ -43,23 +43,23 @@ data ServerState
   = ServerState ReservedQueue ActiveMap
 
 -- | Check if there's still capacity and reserve a slot for the requested build.
-reserveRequest :: Int -> ServerState -> ReserveRequest -> Process (ProcessReply ReserveReply ServerState)
+reserveRequest :: Int -> ServerState -> ReserveRequest -> Process (ReserveReply, ServerState)
 reserveRequest limit (ServerState queue active) (ReserveRequest hash) = do
   -- TODO: handle overlapping queue items (fail req with fast client retry). allow double if already active? duplicate outgoing notifications? (sounds good)
   now <- liftIO getCurrentTime 
   let flushedQueue = flushExpired queueTimeout now queue
   case (countItems flushedQueue + M.size active >= limit) of
-    True  -> reply NoCapacity (ServerState flushedQueue active)
+    True  -> return (NoCapacity, ServerState flushedQueue active)
     False -> do
       let flushedQueue' = insertItem hash now flushedQueue
-      reply SlotReserved (ServerState flushedQueue' active)
+      return (SlotReserved, ServerState flushedQueue' active)
 
 -- | Initiate a build of the provided source on the previously acquired slot.
 --   The item is only considered expired if previously flushed.
 buildRequest :: Serializable b => ServerState -> CallRef BuildReply -> BuildRequest -> Process (ProcessReply b ServerState)
 buildRequest state@(ServerState reserved active) caller req@(BuildRequest hash _ _ _) = do
   case itemExists hash reserved of
-    Nothing -> replyTo caller Expired >> noReply_ state
+    Nothing -> replyTo caller Expired >> noReply_ state -- TODO: what??
     Just _  -> do
       -- Remove from reserved queue, insert into active, and run compilation
       item <- asyncLinked (task . liftIO $ compile req)
@@ -74,7 +74,7 @@ compile (BuildRequest hash _ flags source) = do
   putStrLn "[*] Invoking compilation"
   let fileName = "/tmp/" <> "kool-" <> showDigest hash
   -- TODO: add flags for deterministic builds
-  let flags' = ["-c", "-xc++", "-o" <> fileName, "-"]
+  let flags' = ["-c", "-xc++", "-o" <> fileName, "-"] <> map T.unpack flags
 
   (code, _, err) <- invokeLocalCompiler flags' source
   putStrLn ("[*] Compilation terminated with code=" <> show code)
@@ -96,15 +96,17 @@ compilationDone state@(ServerState other active) (ProcessMonitorNotification ref
   consider (AsyncDone result) = CompilerOutput result
   consider _                  = UnknownError
 
+defaultServerState = ServerState emptyQueue M.empty
+
 runBuildServer :: Int -> Process ()
 runBuildServer limit = do
   pid <- getSelfPid
   register buildRegName pid
-  serve () (const $ return $ InitOk (ServerState emptyQueue M.empty) (Delay $ seconds 1)) def
+  serve () (const $ return $ InitOk defaultServerState (Delay $ seconds 1)) def
   where
   def = defaultProcess {
           apiHandlers = [
-                  handleCall     (reserveRequest limit)
+                  handleCall     (\s r -> reserveRequest limit s r >>= uncurry reply)
                 , handleCallFrom (buildRequest)
           ]
         , infoHandlers = [
@@ -112,15 +114,14 @@ runBuildServer limit = do
           ]
         }
 
+rtable = __remoteTable initRemoteTable
+
 main :: IO ()
 main = do
-  backend <- initializeBackend "127.0.0.1" "9999" rtable
-  node <- Control.Distributed.Process.Backend.SimpleLocalnet.newLocalNode backend
-
   procs <- getNumProcessors
   putStrLn ("[*] Reconfiguring server process to use #cores=" <> show procs)
   setNumCapabilities procs
 
+  backend <- initializeBackend "127.0.0.1" "9999" rtable
+  node <- Control.Distributed.Process.Backend.SimpleLocalnet.newLocalNode backend
   Control.Distributed.Process.Node.runProcess node (runBuildServer procs)
-  where
-  rtable = __remoteTable initRemoteTable

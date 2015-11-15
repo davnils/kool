@@ -1,4 +1,4 @@
-module ClientTests where
+module Client.Tests where
 
 import Test.Tasty
 

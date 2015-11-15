@@ -2,8 +2,8 @@ module Main where
 
 import ArgsParserTests
 import BuildQueueTests
-import ClientTests
-import ServerTests
+import Client.Tests
+import Server.Tests
 import UtilsTests
 
 import Test.Tasty (defaultMain, testGroup)

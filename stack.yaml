@@ -36,6 +36,10 @@ packages:
     git: https://github.com/haskell-distributed/rank1dynamic.git
     commit: 323a3b2e61163754785fabda7f3e39cdaeb01863
 
+- location:
+    git: https://github.com/haskell-distributed/network-transport-inmemory.git
+    commit: aece7d0754e53e321aa80bac5f2c2284a1790d73
+
 extra-deps: []
 
 resolver: nightly-2015-06-12
