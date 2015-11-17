@@ -1,6 +1,6 @@
 {-# LANGUAGE OverloadedStrings #-}
 
-module BuildQueueTests where
+module Server.BuildQueueTests where
 
 import           BuildQueue
 import           Data.AffineSpace                                   ((.+^))

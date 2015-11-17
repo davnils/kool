@@ -61,7 +61,7 @@ test-suite kool-test
   type:                exitcode-stdio-1.0
   hs-source-dirs:      test
   main-is:             Main.hs
-  other-modules:       ArgsParserTests, BuildQueueTests, Client.Tests, Server.Tests, Server.CompilationTests, Server.ReserveTests, Server.Utils, UtilsTests
+  other-modules:       ArgsParserTests, Client.Tests, Server.Tests, Server.BuildQueueTests, Server.CompilationTests, Server.ReserveTests, Server.Utils, UtilsTests
   build-depends:       base
                      , containers                          == 0.5.*
                      , distributed-process                 == 0.5.*
