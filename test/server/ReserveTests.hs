@@ -33,8 +33,8 @@ someReserveReq = ReserveRequest someHash
 
 -- | Test for reserving with combined limit 0
 reserveSaturatedDefaultstate = testCase "reserveSaturatedDefaultstate" $ do
-  let ServerState queue _ = defaultServerState
-  (_, ServerState queue' _) <- runProcessTest (reserveRequest 0 defaultServerState someReserveReq)
+  let (queue, _) = defaultServerState
+  (_, (queue', _)) <- runProcessTest (reserveRequest 0 defaultServerState someReserveReq)
   assertEqual "Nothing should be reserved when limit is 0" (countItems queue) (countItems queue')
 
 -- | Test that reserve returns success when queue has capacity
@@ -53,8 +53,8 @@ reserveReturnsFailure = testCase "reserveReturnsFailure" $ do
 
 -- | Test many reservations, size of reserved queue == insertions, active state remains same
 reserveSeveralItems = testCase "reserveSeveralItems" $ do
-  let ServerState _ defaultActive = defaultServerState
-  ServerState queue active <- runProcessTest
+  let (_, defaultActive) = defaultServerState
+  (queue, active) <- runProcessTest
     (foldM (\s req -> fmap snd (reserveRequest highLimit s req)) defaultServerState reqs)
 
   assertEqual "Active jobs should be unaffected" (M.size active) (M.size defaultActive)
