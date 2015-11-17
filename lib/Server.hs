@@ -1,4 +1,4 @@
-{-# LANGUAGE GADTs, OverloadedStrings, ScopedTypeVariables #-}
+{-# LANGUAGE BangPatterns, GADTs, OverloadedStrings, ScopedTypeVariables #-}
 
 module Server where
 
@@ -93,16 +93,30 @@ compile (BuildRequest hash _ flags source) = do
 
 -- | Process a completed compilation and send result to client
 compilationDone :: ServerState -> ProcessMonitorNotification -> Process (ProcessAction ServerState)
-compilationDone state@(other, active) (ProcessMonitorNotification ref _ _) = do
+compilationDone state@(other, active) notification = do
+  res <- lookupRef state notification
+  case res of
+    Nothing -> continue state -- TODO: print an error here
+    Just (caller, output, state') -> do
+      let converted = fmap CompilerOutput output
+      replyTo caller (fromMaybe UnknownError converted)
+      continue state'
+
+-- | Lookup the corresponding monitor ref within the active computations.
+--   Will try to receive the corresponding async result.
+lookupRef
+  :: (st ~ (ReservedQueue, ActiveMap meta))
+  => st -> ProcessMonitorNotification -> Process (Maybe (meta, Maybe CompilationResult, st))
+lookupRef state@(other, active) (ProcessMonitorNotification ref _ _) = do
   case M.lookup ref active of
-    Nothing -> continue state
-    Just (item, caller) -> do
+    Nothing -> return Nothing
+    Just (item, tag) -> do
       let active' = M.delete ref active
-      fmap consider (wait item) >>= replyTo caller
-      continue (other, active')
+      result <- consider <$> wait item
+      return (Just (tag, result, (other, active')))
   where
-  consider (AsyncDone result) = CompilerOutput result
-  consider _                  = UnknownError
+  consider (AsyncDone !result) = Just result
+  consider _                   = Nothing
 
 defaultServerState = (emptyQueue, M.empty)
 
