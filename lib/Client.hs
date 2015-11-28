@@ -14,6 +14,7 @@ import           Control.Distributed.Process.Node
 import           Control.Distributed.Process.Serializable
 import           Data.Monoid                                        ((<>))
 import           Network.Transport.TCP                              (createTransport, defaultTCPParameters)
+import qualified System.IO.Strict                                   as Strict
 import           Types
 
 callWrapper :: (Serializable a, Serializable b) => a -> ProcessId -> Process (Maybe b)
@@ -33,7 +34,7 @@ getBuildProcess node = do
 
 main :: IO ()
 main = do
-  preprocessed <- readFile "debugstuff"
+  preprocessed <- Strict.readFile "debugstuff"
   backend <- initializeBackend "127.0.0.1" "4321" initRemoteTable
   node <- Control.Distributed.Process.Backend.SimpleLocalnet.newLocalNode backend
   runProcess node (liftIO (findPeers backend 100000) >>= tryNode preprocessed)
