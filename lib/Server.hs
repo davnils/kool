@@ -4,7 +4,6 @@ module Server where
 
 import           Control.Distributed.Process
 import           Control.Distributed.Process.Async
-import           Control.Distributed.Process.Backend.SimpleLocalnet
 import           Control.Distributed.Process.Extras.Time
 import           Control.Distributed.Process.ManagedProcess
 import           Control.Distributed.Process.Node
@@ -30,6 +29,6 @@ runBuildServer = do
 
 main :: IO ()
 main = do
-  backend <- initializeBackend "127.0.0.1" "9999" initRemoteTable
-  node <- Control.Distributed.Process.Backend.SimpleLocalnet.newLocalNode backend
+  Right transport <- createTransport "127.0.0.1" "9999" defaultTCPParameters
+  node <- newLocalNode transport initRemoteTable
   Control.Distributed.Process.Node.runProcess node runBuildServer

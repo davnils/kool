@@ -21,7 +21,6 @@ library
                      , distributed-process-async           == 0.2.*
                      , distributed-process-client-server   == 0.1.*
                      , distributed-process-extras          == 0.2.*
-                     , distributed-process-simplelocalnet  == 0.2.*
                      , distributed-static                  == 0.3.*
                      , mtl                                 == 2.2.*
                      , network-transport                   == 0.4.*
