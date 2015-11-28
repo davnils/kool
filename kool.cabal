@@ -12,13 +12,10 @@ cabal-version:       >=1.10
 
 library
   hs-source-dirs:      lib
-  exposed-modules:     ArgsParser, BuildQueue, Client, Server, Types, Utils
+  exposed-modules:     Client, Server, Types
   build-depends:       base
-                     , async                               == 2.0.*
-                     -- , avahi                               == 0.1.*
                      , binary                              == 0.7.*
                      , bytestring                          == 0.10.*
-                     , containers                          == 0.5.*
                      , deepseq                             == 1.4.*
                      , distributed-process                 == 0.5.*
                      , distributed-process-async           == 0.2.*
@@ -30,13 +27,7 @@ library
                      , network-transport                   == 0.4.*
                      , network-transport-tcp               == 0.4.*
                      , rank1dynamic                        == 0.3.*
-                     , PSQueue                             == 1.1
-                     , process                             == 1.2.*
-                     , SHA                                 == 1.6.*
                      , text                                == 1.2.*
-                     , thyme                               == 0.3.*
-                     , transformers                        == 0.4.*
-                     , vector-space                        == 0.10.*
   default-language:    Haskell2010
 
 executable kool-client
@@ -55,26 +46,6 @@ executable kool-server
   build-depends:       base
                      , kool
 
-  default-language:    Haskell2010
-
-test-suite kool-test
-  type:                exitcode-stdio-1.0
-  hs-source-dirs:      test
-  main-is:             Main.hs
-  other-modules:       ArgsParserTests, Client.Tests, Server.Tests, Server.BuildTests, Server.BuildQueueTests, Server.CompilationTests, Server.ReserveTests, Server.Utils, UtilsTests
-  build-depends:       base
-                     , bytestring                          == 0.10.*
-                     , containers                          == 0.5.*
-                     , distributed-process                 == 0.5.*
-                     , kool
-                     , network-transport-inmemory          == 0.5.*
-                     , SHA                                 == 1.6.*
-                     , tasty                               == 0.10.*
-                     , tasty-hunit                         == 0.9.*
-                     , text                                == 1.2.*
-                     , thyme                               == 0.3.*
-                     , vector-space                        == 0.10.*
-  ghc-options:         -threaded -rtsopts -with-rtsopts=-N
   default-language:    Haskell2010
 
 source-repository head
