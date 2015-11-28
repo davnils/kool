@@ -1,20 +1,12 @@
-# kool - Distributed Cached C++ Compilation ![Build status](https://travis-ci.org/davnils/kool.svg)
+This is a reduced testcase triggering a blocking bug when invoking "safeCall".
 
-distcc-style distributed C++ compilation with integrated object file cache.
+Install by doing git clone, stack setup, stack install, and:
 
-This project is a work-in-progress and aims to provide an easy-to-use and understandable alternative to distcc.
+stack exec kool-server
 
-## Flow
 
-* User invokes g++ -o file.o file.cc
-* kool intercepts the invoction and parses the arguments
-* Local g++ is used to preprocess the source file
-* Tries to reserve a build slot on any of the available build nodes (by supplying a hash of source and flags)
-* If the hash is a cache hit, an object file is returned, and compilation is done
-* Otherwise submits the source with all flags to be built
-* Client retrieves the result and saves the object file locally
+.. and repeatedly (from the base directory):
 
-## Ideas
+for i in $(seq 1 10); do stack exec -- kool-client; done
 
-The hash->object_file cache will be per-build node to begin with. This can be improved in the future.
-Support for multiple g++ versions would be great, and this structure doesn't require multiple chroots.
+Eventually there will be a case where it prints "Found service on nid://127.0.0.1:9999:0, calling" but doesn't terminate.
