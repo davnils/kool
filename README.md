@@ -6,13 +6,13 @@ This project is a work-in-progress and aims to provide an easy-to-use and unders
 
 ## Flow
 
-* User invokes g++ -o file.o file.cc
-* kool intercepts the invoction and parses the arguments
+* User invokes g++ -c -o file.o file.cc
+* kool intercepts the invocation (by having a kool-client -> g++ symlink) and parses the arguments
 * Local g++ is used to preprocess the source file
 * Tries to reserve a build slot on any of the available build nodes (by supplying a hash of source and flags)
 * If the hash is a cache hit, an object file is returned, and compilation is done
 * Otherwise submits the source with all flags to be built
-* Client retrieves the result and saves the object file locally
+* Client receives the result and saves the object file locally
 
 ## Ideas
 
